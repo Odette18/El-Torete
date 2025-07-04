@@ -84,9 +84,6 @@ el-torete/
 - **Componentes:**  
   Los componentes reutilizables están en `components/`.
 
-## Contribuciones
-
-¡Las contribuciones son bienvenidas! Abre un issue o pull request para sugerencias, mejoras o correcciones.
 
 ## Licencia
 
