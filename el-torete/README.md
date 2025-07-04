@@ -84,11 +84,6 @@ el-torete/
 - **Componentes:**  
   Los componentes reutilizables están en `components/`.
 
-
-## Licencia
-
-[MIT](LICENSE)
-
 ---
 
 **Desarrollado con ❤️ por Odette**
