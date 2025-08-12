@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,48 +12,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, ArrowLeft, Percent } from "lucide-react"
+import { Plus, Edit, Trash2, ArrowLeft, Percent, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+
+type Promotion = {
+  id: string
+  title: string
+  description: string
+  discount_percentage: number
+  promo_category: string
+  start_date?: string
+  end_date?: string
+  is_active: boolean
+  terms_conditions?: string
+  image_url?: string
+}
 
 export default function AdminPromocionesPage() {
-  const [promociones, setPromociones] = useState([
-    {
-      id: 1,
-      title: "2x1 en Hamburguesas",
-      discount: "50",
-      type: "weekly",
-      description: "Todos los martes y jueves",
-      validUntil: "2024-12-31",
-      status: "activo",
-    },
-    {
-      id: 2,
-      title: "Combo Familiar",
-      discount: "25",
-      type: "combo",
-      description: "Pizza + bebidas + postre",
-      validUntil: "2024-12-31",
-      status: "activo",
-    },
-    {
-      id: 3,
-      title: "Happy Hour",
-      discount: "50",
-      type: "happy-hour",
-      description: "Descuento en bebidas",
-      validUntil: "2024-12-31",
-      status: "activo",
-    },
-  ])
-
+  const [promociones, setPromociones] = useState<Promotion[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
+  const [editingItem, setEditingItem] = useState<Promotion | null>(null)
   const [formData, setFormData] = useState({
     title: "",
-    discount: "",
-    type: "",
+    discount_percentage: "",
+    promo_category: "",
     description: "",
-    validUntil: "",
+    start_date: "",
+    end_date: "",
+    terms_conditions: "",
   })
 
   const promoTypes = [
@@ -63,48 +52,148 @@ export default function AdminPromocionesPage() {
     { value: "daily", label: "Diario" },
   ]
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (editingItem) {
-      setPromociones(promociones.map((item) => (item.id === editingItem.id ? { ...item, ...formData } : item)))
-    } else {
-      const newItem = {
-        id: Date.now(),
-        ...formData,
-        status: "activo",
-      }
-      setPromociones([...promociones, newItem])
+  const supabase = createClient()
+
+  // Fetch promotions on component mount
+  useEffect(() => {
+    fetchPromotions()
+  }, [])
+
+  const fetchPromotions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('promotions')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      if (data) setPromociones(data)
+    } catch (error) {
+      console.error('Error fetching promotions:', error)
+    } finally {
+      setLoading(false)
     }
-    resetForm()
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    
+    try {
+      const promotionData = {
+        title: formData.title,
+        description: formData.description,
+        discount_percentage: Number.parseFloat(formData.discount_percentage),
+        promo_category: formData.promo_category,
+        start_date: formData.start_date || undefined,
+        end_date: formData.end_date || undefined,
+        terms_conditions: formData.terms_conditions || undefined,
+      }
+
+      if (editingItem) {
+        // Editar promoción existente
+        const { data, error } = await supabase
+          .from('promotions')
+          .update(promotionData)
+          .eq('id', editingItem.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        
+        setPromociones(promociones.map((item) => 
+          item.id === editingItem.id ? data : item
+        ))
+      } else {
+        // Agregar nueva promoción
+        const { data, error } = await supabase
+          .from('promotions')
+          .insert([{ ...promotionData, is_active: true }])
+          .select()
+          .single()
+
+        if (error) throw error
+        
+        setPromociones([data, ...promociones])
+      }
+      resetForm()
+    } catch (error) {
+      console.error('Error submitting form:', error)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const resetForm = () => {
-    setFormData({ title: "", discount: "", type: "", description: "", validUntil: "" })
+    setFormData({ 
+      title: "", 
+      discount_percentage: "", 
+      promo_category: "", 
+      description: "", 
+      start_date: "",
+      end_date: "",
+      terms_conditions: "",
+    })
     setEditingItem(null)
     setIsDialogOpen(false)
   }
 
-  const handleEdit = (item: any) => {
+  const handleEdit = (item: Promotion) => {
     setEditingItem(item)
     setFormData({
       title: item.title,
-      discount: item.discount,
-      type: item.type,
+      discount_percentage: item.discount_percentage.toString(),
+      promo_category: item.promo_category,
       description: item.description,
-      validUntil: item.validUntil,
+      start_date: item.start_date || "",
+      end_date: item.end_date || "",
+      terms_conditions: item.terms_conditions || "",
     })
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: number) => {
-    setPromociones(promociones.filter((item) => item.id !== id))
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('promotions')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      
+      setPromociones(promociones.filter((item) => item.id !== id))
+    } catch (error) {
+      console.error('Error deleting promotion:', error)
+    }
   }
 
-  const toggleStatus = (id: number) => {
-    setPromociones(
-      promociones.map((item) =>
-        item.id === id ? { ...item, status: item.status === "activo" ? "inactivo" : "activo" } : item,
-      ),
+  const toggleStatus = async (id: string) => {
+    try {
+      const promotion = promociones.find(p => p.id === id)
+      if (!promotion) return
+
+      const { data, error } = await supabase
+        .from('promotions')
+        .update({ is_active: !promotion.is_active })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      
+      setPromociones(promociones.map((item) => 
+        item.id === id ? data : item
+      ))
+    } catch (error) {
+      console.error('Error toggling status:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
     )
   }
 
@@ -144,18 +233,18 @@ export default function AdminPromocionesPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="discount">Descuento (%)</Label>
+                    <Label htmlFor="discount_percentage">Descuento (%)</Label>
                     <Input
-                      id="discount"
+                      id="discount_percentage"
                       type="number"
-                      value={formData.discount}
-                      onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
+                      value={formData.discount_percentage}
+                      onChange={(e) => setFormData({ ...formData, discount_percentage: e.target.value })}
                       required
                     />
                   </div>
                   <div>
-                    <Label htmlFor="type">Tipo</Label>
-                    <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                    <Label htmlFor="promo_category">Tipo</Label>
+                    <Select value={formData.promo_category} onValueChange={(value) => setFormData({ ...formData, promo_category: value })}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un tipo" />
                       </SelectTrigger>
@@ -178,20 +267,40 @@ export default function AdminPromocionesPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="validUntil">Válido hasta</Label>
+                    <Label htmlFor="start_date">Fecha de inicio</Label>
                     <Input
-                      id="validUntil"
+                      id="start_date"
                       type="date"
-                      value={formData.validUntil}
-                      onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
-                      required
+                      value={formData.start_date}
+                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="end_date">Fecha de fin</Label>
+                    <Input
+                      id="end_date"
+                      type="date"
+                      value={formData.end_date}
+                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="terms_conditions">Términos y condiciones</Label>
+                    <Textarea
+                      id="terms_conditions"
+                      value={formData.terms_conditions}
+                      onChange={(e) => setFormData({ ...formData, terms_conditions: e.target.value })}
+                      placeholder="Términos y condiciones opcionales"
                     />
                   </div>
                   <div className="flex justify-end space-x-2">
                     <Button type="button" variant="outline" onClick={resetForm}>
                       Cancelar
                     </Button>
-                    <Button type="submit" className="bg-primary hover:bg-primary/90">
+                    <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={submitting}>
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
                       {editingItem ? "Actualizar" : "Agregar"}
                     </Button>
                   </div>
@@ -231,19 +340,19 @@ export default function AdminPromocionesPage() {
                     <TableCell>
                       <Badge className="bg-secondary text-white">
                         <Percent className="h-3 w-3 mr-1" />
-                        {promo.discount}%
+                        {promo.discount_percentage}%
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{promoTypes.find((type) => type.value === promo.type)?.label}</Badge>
+                      <Badge variant="outline">{promoTypes.find((type) => type.value === promo.promo_category)?.label}</Badge>
                     </TableCell>
-                    <TableCell>{promo.validUntil}</TableCell>
+                    <TableCell>{promo.end_date || 'Sin fecha límite'}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={promo.status === "activo" ? "default" : "secondary"}
-                        className={promo.status === "activo" ? "bg-green-500" : "bg-gray-500"}
+                        variant={promo.is_active ? "default" : "secondary"}
+                        className={promo.is_active ? "bg-green-500" : "bg-gray-500"}
                       >
-                        {promo.status}
+                        {promo.is_active ? "Activa" : "Inactiva"}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -252,7 +361,7 @@ export default function AdminPromocionesPage() {
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => toggleStatus(promo.id)}>
-                          {promo.status === "activo" ? "Desactivar" : "Activar"}
+                          {promo.is_active ? "Desactivar" : "Activar"}
                         </Button>
                         <Button
                           size="sm"

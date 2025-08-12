@@ -1,38 +1,62 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Users, Menu, Tag, MapPin, BarChart3, DollarSign } from "lucide-react"
+import { Users, Menu, Tag, MapPin, BarChart3, DollarSign, TrendingUp, Clock } from "lucide-react"
 import Link from "next/link"
 import { LogoutButton } from "@/components/logout-button"
+import { createClient } from "@/lib/supabase/server"
 
-export default function AdminDashboard() {
+export default async function AdminDashboard() {
+  const supabase = await createClient()
+
+  // Obtener estadísticas reales de Supabase
+  const [
+    { count: totalMenuItems },
+    { count: activePromotions }, 
+    { count: activeLocations },
+    { count: totalUsers },
+    { data: menuItems },
+    { data: recentPromotions },
+  ] = await Promise.all([
+    supabase.from('menu_items').select('*', { count: 'exact', head: true }),
+    supabase.from('promotions').select('*', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('locations').select('*', { count: 'exact', head: true }).eq('is_active', true),
+    // Temporal: mock data hasta crear tabla profiles
+    Promise.resolve({ count: 1 }),
+    supabase.from('menu_items').select('name, is_available').order('created_at', { ascending: false }).limit(5),
+    supabase.from('promotions').select('title, is_active, created_at').order('created_at', { ascending: false }).limit(3),
+  ])
+
+  const availableItems = menuItems?.filter(item => item.is_available).length || 0
+  const unavailableItems = (totalMenuItems || 0) - availableItems
+
   const stats = [
     {
-      title: "Ventas del Día",
-      value: "$2,450",
-      change: "+12%",
-      icon: DollarSign,
-      color: "text-green-600",
-    },
-    {
-      title: "Hamburguesas Vendidas",
-      value: "156",
-      change: "+23",
-      icon: BarChart3,
-      color: "text-blue-600",
-    },
-    {
       title: "Platos en Menú",
-      value: "32",
-      change: "+2",
+      value: totalMenuItems?.toString() || "0",
+      change: `${availableItems} disponibles`,
       icon: Menu,
       color: "text-purple-600",
     },
     {
       title: "Promociones Activas",
-      value: "4",
-      change: "+1",
+      value: activePromotions?.toString() || "0",
+      change: "en curso",
       icon: Tag,
       color: "text-orange-600",
+    },
+    {
+      title: "Ubicaciones Activas",
+      value: activeLocations?.toString() || "0",
+      change: "funcionando",
+      icon: MapPin,
+      color: "text-blue-600",
+    },
+    {
+      title: "Usuarios del Sistema",
+      value: totalUsers?.toString() || "0",
+      change: "registrados",
+      icon: Users,
+      color: "text-green-600",
     },
   ]
 
@@ -94,7 +118,7 @@ export default function AdminDashboard() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                     <p className="text-2xl font-bold text-[#1F2937]">{stat.value}</p>
-                    <p className={`text-sm ${stat.color}`}>{stat.change} vs ayer</p>
+                    <p className={`text-sm ${stat.color}`}>{stat.change}</p>
                   </div>
                   <stat.icon className={`h-8 w-8 ${stat.color}`} />
                 </div>
@@ -123,38 +147,77 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Actividad Reciente</CardTitle>
-            <CardDescription>Últimas acciones realizadas en el sistema</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Nuevo plato agregado al menú</p>
-                  <p className="text-xs text-gray-500">Hace 2 horas</p>
-                </div>
+        {/* Content Overview */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Recent Menu Items */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Menu className="h-5 w-5 mr-2 text-purple-600" />
+                Últimos Platos del Menú
+              </CardTitle>
+              <CardDescription>Platos agregados recientemente</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {menuItems?.slice(0, 4).map((item, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{item.name}</p>
+                    </div>
+                    <div className={`px-2 py-1 rounded-full text-xs ${
+                      item.is_available 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-red-100 text-red-700'
+                    }`}>
+                      {item.is_available ? 'Disponible' : 'No disponible'}
+                    </div>
+                  </div>
+                ))}
+                {(!menuItems || menuItems.length === 0) && (
+                  <p className="text-sm text-gray-500 text-center py-4">No hay platos en el menú</p>
+                )}
               </div>
-              <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Promoción actualizada</p>
-                  <p className="text-xs text-gray-500">Hace 4 horas</p>
-                </div>
+            </CardContent>
+          </Card>
+
+          {/* Recent Promotions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Tag className="h-5 w-5 mr-2 text-orange-600" />
+                Promociones Recientes
+              </CardTitle>
+              <CardDescription>Últimas promociones creadas</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {recentPromotions?.map((promo, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{promo.title}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(promo.created_at).toLocaleDateString('es-ES')}
+                      </p>
+                    </div>
+                    <div className={`px-2 py-1 rounded-full text-xs ${
+                      promo.is_active 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {promo.is_active ? 'Activa' : 'Inactiva'}
+                    </div>
+                  </div>
+                ))}
+                {(!recentPromotions || recentPromotions.length === 0) && (
+                  <p className="text-sm text-gray-500 text-center py-4">No hay promociones creadas</p>
+                )}
               </div>
-              <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Nueva ubicación agregada</p>
-                  <p className="text-xs text-gray-500">Hace 1 día</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
+
+
       </div>
     </div>
   )

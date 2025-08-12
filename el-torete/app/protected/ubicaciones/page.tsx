@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,83 +11,263 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, ArrowLeft, MapPin } from "lucide-react"
+import { Plus, Edit, Trash2, ArrowLeft, MapPin, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+
+type Location = {
+  id: string
+  name: string
+  address: string
+  phone?: string
+  features?: string[]
+  is_active: boolean
+  hours_monday?: string
+  hours_tuesday?: string
+  hours_wednesday?: string
+  hours_thursday?: string
+  hours_friday?: string
+  hours_saturday?: string
+  hours_sunday?: string
+}
 
 export default function AdminUbicacionesPage() {
-  const [ubicaciones, setUbicaciones] = useState([
-    {
-      id: 1,
-      name: "Sucursal Centro",
-      address: "Av. Principal 123, Centro Histórico",
-      phone: "+1 (555) 123-4567",
-      hours: "Lun-Dom: 11:00 AM - 10:00 PM",
-      features: "Estacionamiento, Terraza, WiFi Gratis, Delivery",
-      status: "activo",
-    },
-    {
-      id: 2,
-      name: "Sucursal Norte",
-      address: "Blvd. Norte 456, Plaza Comercial",
-      phone: "+1 (555) 234-5678",
-      hours: "Lun-Dom: 12:00 PM - 11:00 PM",
-      features: "Drive Thru, Área de Juegos, WiFi Gratis, Delivery",
-      status: "activo",
-    },
-  ])
-
+  const [ubicaciones, setUbicaciones] = useState<Location[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
+  const [editingItem, setEditingItem] = useState<Location | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     address: "",
     phone: "",
-    hours: "",
     features: "",
+    hours_monday: "",
+    hours_tuesday: "",
+    hours_wednesday: "",
+    hours_thursday: "",
+    hours_friday: "",
+    hours_saturday: "",
+    hours_sunday: "",
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (editingItem) {
-      setUbicaciones(ubicaciones.map((item) => (item.id === editingItem.id ? { ...item, ...formData } : item)))
-    } else {
-      const newItem = {
-        id: Date.now(),
-        ...formData,
-        status: "activo",
-      }
-      setUbicaciones([...ubicaciones, newItem])
+  const supabase = createClient()
+
+  // Fetch locations on component mount
+  useEffect(() => {
+    fetchLocations()
+  }, [])
+
+  const fetchLocations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      if (data) setUbicaciones(data)
+    } catch (error) {
+      console.error('Error fetching locations:', error)
+    } finally {
+      setLoading(false)
     }
-    resetForm()
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    
+    try {
+      const locationData = {
+        name: formData.name,
+        address: formData.address,
+        phone: formData.phone || undefined,
+        features: formData.features ? formData.features.split(',').map(f => f.trim()) : [],
+        hours_monday: formData.hours_monday || undefined,
+        hours_tuesday: formData.hours_tuesday || undefined,
+        hours_wednesday: formData.hours_wednesday || undefined,
+        hours_thursday: formData.hours_thursday || undefined,
+        hours_friday: formData.hours_friday || undefined,
+        hours_saturday: formData.hours_saturday || undefined,
+        hours_sunday: formData.hours_sunday || undefined,
+      }
+
+      if (editingItem) {
+        // Editar ubicación existente
+        const { data, error } = await supabase
+          .from('locations')
+          .update(locationData)
+          .eq('id', editingItem.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        
+        setUbicaciones(ubicaciones.map((item) => 
+          item.id === editingItem.id ? data : item
+        ))
+      } else {
+        // Agregar nueva ubicación
+        const { data, error } = await supabase
+          .from('locations')
+          .insert([{ ...locationData, is_active: true }])
+          .select()
+          .single()
+
+        if (error) throw error
+        
+        setUbicaciones([data, ...ubicaciones])
+      }
+      resetForm()
+    } catch (error) {
+      console.error('Error submitting form:', error)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const resetForm = () => {
-    setFormData({ name: "", address: "", phone: "", hours: "", features: "" })
+    setFormData({ 
+      name: "", 
+      address: "", 
+      phone: "", 
+      features: "",
+      hours_monday: "",
+      hours_tuesday: "",
+      hours_wednesday: "",
+      hours_thursday: "",
+      hours_friday: "",
+      hours_saturday: "",
+      hours_sunday: "",
+    })
     setEditingItem(null)
     setIsDialogOpen(false)
   }
 
-  const handleEdit = (item: any) => {
+  const handleEdit = (item: Location) => {
     setEditingItem(item)
     setFormData({
       name: item.name,
       address: item.address,
-      phone: item.phone,
-      hours: item.hours,
-      features: item.features,
+      phone: item.phone || "",
+      features: item.features?.join(', ') || "",
+      hours_monday: item.hours_monday || "",
+      hours_tuesday: item.hours_tuesday || "",
+      hours_wednesday: item.hours_wednesday || "",
+      hours_thursday: item.hours_thursday || "",
+      hours_friday: item.hours_friday || "",
+      hours_saturday: item.hours_saturday || "",
+      hours_sunday: item.hours_sunday || "",
     })
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: number) => {
-    setUbicaciones(ubicaciones.filter((item) => item.id !== id))
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      
+      setUbicaciones(ubicaciones.filter((item) => item.id !== id))
+    } catch (error) {
+      console.error('Error deleting location:', error)
+    }
   }
 
-  const toggleStatus = (id: number) => {
-    setUbicaciones(
-      ubicaciones.map((item) =>
-        item.id === id ? { ...item, status: item.status === "activo" ? "inactivo" : "activo" } : item,
-      ),
+  const toggleStatus = async (id: string) => {
+    try {
+      const location = ubicaciones.find(l => l.id === id)
+      if (!location) return
+
+      const { data, error } = await supabase
+        .from('locations')
+        .update({ is_active: !location.is_active })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      
+      setUbicaciones(ubicaciones.map((item) => 
+        item.id === id ? data : item
+      ))
+    } catch (error) {
+      console.error('Error toggling status:', error)
+    }
+  }
+
+  const getHoursDisplay = (location: Location) => {
+    const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    const dayNames = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+    // Obtener horarios para cada día
+    const schedules = days.map((day, index) => {
+      const hours = location[`hours_${day}` as keyof Location] as string
+      return { day: dayNames[index], hours: hours || null }
+    })
+
+    // Agrupar días consecutivos con el mismo horario
+    const groupedSchedules: Array<{ days: string, hours: string }> = []
+    let currentGroup: { days: string[], hours: string | null } = { days: [], hours: null }
+
+    schedules.forEach((schedule, index) => {
+      if (schedule.hours && schedule.hours === currentGroup.hours) {
+        // Mismo horario, agregar al grupo actual
+        currentGroup.days.push(schedule.day)
+      } else if (schedule.hours) {
+        // Diferente horario o primer horario válido
+        if (currentGroup.days.length > 0 && currentGroup.hours) {
+          // Guardar grupo anterior
+          const daysRange = currentGroup.days.length > 2 && 
+            currentGroup.days[0] === "Lun" && 
+            currentGroup.days[currentGroup.days.length - 1] === "Sáb"
+            ? "Lun–Sáb"
+            : currentGroup.days.length > 1
+            ? `${currentGroup.days[0]}–${currentGroup.days[currentGroup.days.length - 1]}`
+            : currentGroup.days.join(", ")
+          
+          groupedSchedules.push({
+            days: daysRange,
+            hours: currentGroup.hours
+          })
+        }
+        // Iniciar nuevo grupo
+        currentGroup = { days: [schedule.day], hours: schedule.hours }
+      }
+    })
+
+    // Agregar último grupo si existe
+    if (currentGroup.days.length > 0 && currentGroup.hours) {
+      const daysRange = currentGroup.days.length > 2 && 
+        currentGroup.days[0] === "Lun" && 
+        currentGroup.days[currentGroup.days.length - 1] === "Sáb"
+        ? "Lun–Sáb"
+        : currentGroup.days.length > 1
+        ? `${currentGroup.days[0]}–${currentGroup.days[currentGroup.days.length - 1]}`
+        : currentGroup.days.join(", ")
+      
+      groupedSchedules.push({
+        days: daysRange,
+        hours: currentGroup.hours
+      })
+    }
+
+    if (groupedSchedules.length === 0) {
+      return 'Horarios no especificados'
+    }
+
+    return groupedSchedules.map(group => `${group.days}: ${group.hours}`).join(' | ')
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
     )
   }
 
@@ -144,15 +324,70 @@ export default function AdminUbicacionesPage() {
                       required
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="hours">Horarios</Label>
-                    <Input
-                      id="hours"
-                      value={formData.hours}
-                      onChange={(e) => setFormData({ ...formData, hours: e.target.value })}
-                      placeholder="Ej: Lun-Dom: 11:00 AM - 10:00 PM"
-                      required
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="hours_monday">Lunes</Label>
+                      <Input
+                        id="hours_monday"
+                        value={formData.hours_monday}
+                        onChange={(e) => setFormData({ ...formData, hours_monday: e.target.value })}
+                        placeholder="09:00 - 21:00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="hours_tuesday">Martes</Label>
+                      <Input
+                        id="hours_tuesday"
+                        value={formData.hours_tuesday}
+                        onChange={(e) => setFormData({ ...formData, hours_tuesday: e.target.value })}
+                        placeholder="09:00 - 21:00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="hours_wednesday">Miércoles</Label>
+                      <Input
+                        id="hours_wednesday"
+                        value={formData.hours_wednesday}
+                        onChange={(e) => setFormData({ ...formData, hours_wednesday: e.target.value })}
+                        placeholder="09:00 - 21:00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="hours_thursday">Jueves</Label>
+                      <Input
+                        id="hours_thursday"
+                        value={formData.hours_thursday}
+                        onChange={(e) => setFormData({ ...formData, hours_thursday: e.target.value })}
+                        placeholder="09:00 - 21:00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="hours_friday">Viernes</Label>
+                      <Input
+                        id="hours_friday"
+                        value={formData.hours_friday}
+                        onChange={(e) => setFormData({ ...formData, hours_friday: e.target.value })}
+                        placeholder="09:00 - 21:00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="hours_saturday">Sábado</Label>
+                      <Input
+                        id="hours_saturday"
+                        value={formData.hours_saturday}
+                        onChange={(e) => setFormData({ ...formData, hours_saturday: e.target.value })}
+                        placeholder="09:00 - 21:00"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Label htmlFor="hours_sunday">Domingo</Label>
+                      <Input
+                        id="hours_sunday"
+                        value={formData.hours_sunday}
+                        onChange={(e) => setFormData({ ...formData, hours_sunday: e.target.value })}
+                        placeholder="09:00 - 21:00"
+                      />
+                    </div>
                   </div>
                   <div>
                     <Label htmlFor="features">Servicios (separados por coma)</Label>
@@ -161,14 +396,16 @@ export default function AdminUbicacionesPage() {
                       value={formData.features}
                       onChange={(e) => setFormData({ ...formData, features: e.target.value })}
                       placeholder="Ej: Estacionamiento, WiFi Gratis, Delivery"
-                      required
                     />
                   </div>
                   <div className="flex justify-end space-x-2">
                     <Button type="button" variant="outline" onClick={resetForm}>
                       Cancelar
                     </Button>
-                    <Button type="submit" className="bg-primary hover:bg-primary/90">
+                    <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={submitting}>
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
                       {editingItem ? "Actualizar" : "Agregar"}
                     </Button>
                   </div>
@@ -203,23 +440,23 @@ export default function AdminUbicacionesPage() {
                         <MapPin className="h-4 w-4 text-primary" />
                         <div>
                           <div className="font-medium">{ubicacion.name}</div>
-                          <div className="text-sm text-gray-500">{ubicacion.hours}</div>
+                          <div className="text-sm text-gray-500">{getHoursDisplay(ubicacion)}</div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="max-w-xs">
                         <div className="text-sm">{ubicacion.address}</div>
-                        <div className="text-xs text-gray-500 mt-1">{ubicacion.features}</div>
+                        <div className="text-xs text-gray-500 mt-1">{ubicacion.features?.join(', ')}</div>
                       </div>
                     </TableCell>
                     <TableCell>{ubicacion.phone}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={ubicacion.status === "activo" ? "default" : "secondary"}
-                        className={ubicacion.status === "activo" ? "bg-green-500" : "bg-gray-500"}
+                        variant={ubicacion.is_active ? "default" : "secondary"}
+                        className={ubicacion.is_active ? "bg-green-500" : "bg-gray-500"}
                       >
-                        {ubicacion.status}
+                        {ubicacion.is_active ? "Activa" : "Inactiva"}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -228,7 +465,7 @@ export default function AdminUbicacionesPage() {
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => toggleStatus(ubicacion.id)}>
-                          {ubicacion.status === "activo" ? "Desactivar" : "Activar"}
+                          {ubicacion.is_active ? "Desactivar" : "Activar"}
                         </Button>
                         <Button
                           size="sm"

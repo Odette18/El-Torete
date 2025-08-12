@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,43 +11,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, ArrowLeft, User, Shield } from "lucide-react"
+import { Plus, Edit, Trash2, ArrowLeft, User, Shield, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+
+type UserProfile = {
+  id: string
+  full_name: string
+  role: 'admin' | 'manager' | 'staff'
+  is_active: boolean
+  created_at: string
+  email?: string
+}
 
 export default function AdminUsuariosPage() {
-  const [usuarios, setUsuarios] = useState([
-    {
-      id: 1,
-      name: "Admin Principal",
-      email: "admin@restaurante.com",
-      role: "admin",
-      status: "activo",
-      lastLogin: "2024-01-15",
-    },
-    {
-      id: 2,
-      name: "Manager Norte",
-      email: "manager.norte@restaurante.com",
-      role: "manager",
-      status: "activo",
-      lastLogin: "2024-01-14",
-    },
-    {
-      id: 3,
-      name: "Staff Centro",
-      email: "staff.centro@restaurante.com",
-      role: "staff",
-      status: "inactivo",
-      lastLogin: "2024-01-10",
-    },
-  ])
-
+  const [usuarios, setUsuarios] = useState<UserProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
+  const [editingItem, setEditingItem] = useState<UserProfile | null>(null)
   const [formData, setFormData] = useState({
-    name: "",
+    full_name: "",
     email: "",
-    role: "",
+    role: "" as 'admin' | 'manager' | 'staff' | "",
     password: "",
   })
 
@@ -57,56 +43,113 @@ export default function AdminUsuariosPage() {
     { value: "staff", label: "Staff" },
   ]
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (editingItem) {
-      setUsuarios(
-        usuarios.map((item) =>
-          item.id === editingItem.id
-            ? { ...item, name: formData.name, email: formData.email, role: formData.role }
-            : item,
-        ),
-      )
-    } else {
-      const newItem = {
-        id: Date.now(),
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        status: "activo",
-        lastLogin: "Nunca",
-      }
-      setUsuarios([...usuarios, newItem])
+  const supabase = createClient()
+
+  // Fetch users on component mount
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const fetchUsers = async () => {
+    try {
+      // Temporal: usar datos mock hasta que se cree la tabla profiles
+      const mockUsers = [
+        {
+          id: '1',
+          full_name: 'Administrador Principal',
+          role: 'admin' as const,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          email: 'admin@eltorete.com'
+        }
+      ]
+      setUsuarios(mockUsers)
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    } finally {
+      setLoading(false)
     }
-    resetForm()
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    
+    try {
+      if (editingItem) {
+        // Editar usuario existente
+        const { data, error } = await supabase
+          .from('profiles')
+          .update({
+            full_name: formData.full_name,
+            role: formData.role,
+          })
+          .eq('id', editingItem.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        
+        setUsuarios(usuarios.map((item) => 
+          item.id === editingItem.id ? data : item
+        ))
+      } else {
+        // Crear nuevo usuario - necesitaríamos una función servidor para esto
+        // por ahora solo mostramos mensaje
+        alert('La creación de usuarios requiere configuración adicional del servidor')
+      }
+      resetForm()
+    } catch (error) {
+      console.error('Error submitting form:', error)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const resetForm = () => {
-    setFormData({ name: "", email: "", role: "", password: "" })
+    setFormData({ full_name: "", email: "", role: "", password: "" })
     setEditingItem(null)
     setIsDialogOpen(false)
   }
 
-  const handleEdit = (item: any) => {
+  const handleEdit = (item: UserProfile) => {
     setEditingItem(item)
     setFormData({
-      name: item.name,
-      email: item.email,
+      full_name: item.full_name,
+      email: item.email || "",
       role: item.role,
       password: "",
     })
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: number) => {
-    setUsuarios(usuarios.filter((item) => item.id !== id))
+  const toggleStatus = async (id: string) => {
+    try {
+      const user = usuarios.find(u => u.id === id)
+      if (!user) return
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ is_active: !user.is_active })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      
+      setUsuarios(usuarios.map((item) => 
+        item.id === id ? data : item
+      ))
+    } catch (error) {
+      console.error('Error toggling status:', error)
+    }
   }
 
-  const toggleStatus = (id: number) => {
-    setUsuarios(
-      usuarios.map((item) =>
-        item.id === id ? { ...item, status: item.status === "activo" ? "inactivo" : "activo" } : item,
-      ),
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
     )
   }
 
@@ -152,11 +195,11 @@ export default function AdminUsuariosPage() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label htmlFor="name">Nombre Completo</Label>
+                    <Label htmlFor="full_name">Nombre Completo</Label>
                     <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      id="full_name"
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                       required
                     />
                   </div>
@@ -167,12 +210,13 @@ export default function AdminUsuariosPage() {
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      required
+                      required={!editingItem}
+                      disabled={editingItem !== null}
                     />
                   </div>
                   <div>
                     <Label htmlFor="role">Rol</Label>
-                    <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                    <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value as 'admin' | 'manager' | 'staff' })}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un rol" />
                       </SelectTrigger>
@@ -201,7 +245,10 @@ export default function AdminUsuariosPage() {
                     <Button type="button" variant="outline" onClick={resetForm}>
                       Cancelar
                     </Button>
-                    <Button type="submit" className="bg-primary hover:bg-primary/90">
+                    <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={submitting}>
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
                       {editingItem ? "Actualizar" : "Agregar"}
                     </Button>
                   </div>
@@ -223,7 +270,7 @@ export default function AdminUsuariosPage() {
                 <TableRow>
                   <TableHead>Usuario</TableHead>
                   <TableHead>Rol</TableHead>
-                  <TableHead>Último Acceso</TableHead>
+                  <TableHead>Fecha de Registro</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
@@ -237,7 +284,7 @@ export default function AdminUsuariosPage() {
                           <User className="h-4 w-4 text-gray-600" />
                         </div>
                         <div>
-                          <div className="font-medium">{usuario.name}</div>
+                          <div className="font-medium">{usuario.full_name}</div>
                           <div className="text-sm text-gray-500">{usuario.email}</div>
                         </div>
                       </div>
@@ -248,13 +295,13 @@ export default function AdminUsuariosPage() {
                         <span className="ml-1">{roles.find((role) => role.value === usuario.role)?.label}</span>
                       </Badge>
                     </TableCell>
-                    <TableCell>{usuario.lastLogin}</TableCell>
+                    <TableCell>{new Date(usuario.created_at).toLocaleDateString('es-ES')}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={usuario.status === "activo" ? "default" : "secondary"}
-                        className={usuario.status === "activo" ? "bg-green-500" : "bg-gray-500"}
+                        variant={usuario.is_active ? "default" : "secondary"}
+                        className={usuario.is_active ? "bg-green-500" : "bg-gray-500"}
                       >
-                        {usuario.status}
+                        {usuario.is_active ? "Activo" : "Inactivo"}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -263,15 +310,7 @@ export default function AdminUsuariosPage() {
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => toggleStatus(usuario.id)}>
-                          {usuario.status === "activo" ? "Desactivar" : "Activar"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDelete(usuario.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
+                          {usuario.is_active ? "Desactivar" : "Activar"}
                         </Button>
                       </div>
                     </TableCell>

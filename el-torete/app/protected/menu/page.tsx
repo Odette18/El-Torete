@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,102 +19,208 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Edit, Trash2, ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+
+type MenuItem = {
+  id: string
+  name: string
+  description: string
+  price: number
+  category_id: string
+  is_available: boolean
+  categories?: {
+    id: string
+    name: string
+    slug: string
+  }
+}
+
+type Category = {
+  id: string
+  name: string
+  slug: string
+  is_active: boolean
+}
 
 export default function AdminMenuPage() {
-  const [menuItems, setMenuItems] = useState([
-    {
-      id: 1,
-      name: "Hamburguesa Delicia",
-      category: "principales",
-      price: 12.99,
-      description: "Carne jugosa con queso",
-      status: "activo",
-    },
-    {
-      id: 2,
-      name: "Pizza Suprema",
-      category: "principales",
-      price: 18.99,
-      description: "Pizza con pepperoni",
-      status: "activo",
-    },
-    {
-      id: 3,
-      name: "Alitas BBQ",
-      category: "entradas",
-      price: 8.99,
-      description: "Alitas con salsa barbacoa",
-      status: "activo",
-    },
-    { id: 4, name: "Cheesecake", category: "postres", price: 6.99, description: "Pastel de queso", status: "inactivo" },
-  ])
-
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
   const [formData, setFormData] = useState({
     name: "",
-    category: "",
+    category_id: "",
     price: "",
     description: "",
   })
 
-  const categories = [
-    { value: "entradas", label: "Entradas" },
-    { value: "principales", label: "Principales" },
-    { value: "postres", label: "Postres" },
-    { value: "bebidas", label: "Bebidas" },
-  ]
+  const supabase = createClient()
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (editingItem) {
-      // Editar item existente
-      setMenuItems(
-        menuItems.map((item) =>
-          item.id === editingItem.id ? { ...item, ...formData, price: Number.parseFloat(formData.price) } : item,
-        ),
-      )
-    } else {
-      // Agregar nuevo item
-      const newItem = {
-        id: Date.now(),
-        ...formData,
-        price: Number.parseFloat(formData.price),
-        status: "activo",
-      }
-      setMenuItems([...menuItems, newItem])
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      const [{ data: menuData }, { data: categoriesData }] = await Promise.all([
+        supabase
+          .from("menu_items")
+          .select(`
+            *,
+            categories (
+              id,
+              name,
+              slug
+            )
+          `)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from("categories")
+          .select('*')
+          .eq('is_active', true)
+          .order('display_order')
+      ])
+      
+      if (menuData) setMenuItems(menuData)
+      if (categoriesData) setCategories(categoriesData)
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    } finally {
+      setLoading(false)
     }
-    resetForm()
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    
+    try {
+      const itemData = {
+        name: formData.name,
+        description: formData.description,
+        price: Number.parseFloat(formData.price),
+        category_id: formData.category_id,
+      }
+
+      if (editingItem) {
+        // Editar item existente
+        const { data, error } = await supabase
+          .from('menu_items')
+          .update(itemData)
+          .eq('id', editingItem.id)
+          .select(`
+            *,
+            categories (
+              id,
+              name,
+              slug
+            )
+          `)
+          .single()
+
+        if (error) throw error
+        
+        setMenuItems(menuItems.map((item) => 
+          item.id === editingItem.id ? data : item
+        ))
+      } else {
+        // Agregar nuevo item
+        const { data, error } = await supabase
+          .from('menu_items')
+          .insert([{ ...itemData, is_available: true }])
+          .select(`
+            *,
+            categories (
+              id,
+              name,
+              slug
+            )
+          `)
+          .single()
+
+        if (error) throw error
+        
+        setMenuItems([data, ...menuItems])
+      }
+      resetForm()
+    } catch (error) {
+      console.error('Error submitting form:', error)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const resetForm = () => {
-    setFormData({ name: "", category: "", price: "", description: "" })
+    setFormData({ name: "", category_id: "", price: "", description: "" })
     setEditingItem(null)
     setIsDialogOpen(false)
   }
 
-  const handleEdit = (item: any) => {
+  const handleEdit = (item: MenuItem) => {
     setEditingItem(item)
     setFormData({
       name: item.name,
-      category: item.category,
+      category_id: item.category_id,
       price: item.price.toString(),
       description: item.description,
     })
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: number) => {
-    setMenuItems(menuItems.filter((item) => item.id !== id))
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('menu_items')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      
+      setMenuItems(menuItems.filter((item) => item.id !== id))
+    } catch (error) {
+      console.error('Error deleting item:', error)
+    }
   }
 
-  const toggleStatus = (id: number) => {
-    setMenuItems(
-      menuItems.map((item) =>
-        item.id === id ? { ...item, status: item.status === "activo" ? "inactivo" : "activo" } : item,
-      ),
+  const toggleStatus = async (id: string) => {
+    try {
+      const item = menuItems.find(item => item.id === id)
+      if (!item) return
+
+      const { data, error } = await supabase
+        .from('menu_items')
+        .update({ is_available: !item.is_available })
+        .eq('id', id)
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            slug
+          )
+        `)
+        .single()
+
+      if (error) throw error
+      
+      setMenuItems(menuItems.map((item) => 
+        item.id === id ? data : item
+      ))
+    } catch (error) {
+      console.error('Error toggling status:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
     )
   }
 
@@ -160,16 +266,16 @@ export default function AdminMenuPage() {
                   <div>
                     <Label htmlFor="category">Categoría</Label>
                     <Select
-                      value={formData.category}
-                      onValueChange={(value) => setFormData({ ...formData, category: value })}
+                      value={formData.category_id}
+                      onValueChange={(value) => setFormData({ ...formData, category_id: value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona una categoría" />
                       </SelectTrigger>
                       <SelectContent>
                         {categories.map((cat) => (
-                          <SelectItem key={cat.value} value={cat.value}>
-                            {cat.label}
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -199,7 +305,10 @@ export default function AdminMenuPage() {
                     <Button type="button" variant="outline" onClick={resetForm}>
                       Cancelar
                     </Button>
-                    <Button type="submit" className="bg-primary hover:bg-primary/90">
+                    <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={submitting}>
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
                       {editingItem ? "Actualizar" : "Agregar"}
                     </Button>
                   </div>
@@ -236,15 +345,17 @@ export default function AdminMenuPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{categories.find((cat) => cat.value === item.category)?.label}</Badge>
+                      <Badge variant="outline">
+                        {item.categories?.name || categories.find((cat) => cat.id === item.category_id)?.name}
+                      </Badge>
                     </TableCell>
                     <TableCell>${item.price}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={item.status === "activo" ? "default" : "secondary"}
-                        className={item.status === "activo" ? "bg-green-500" : "bg-gray-500"}
+                        variant={item.is_available ? "default" : "secondary"}
+                        className={item.is_available ? "bg-green-500" : "bg-gray-500"}
                       >
-                        {item.status}
+                        {item.is_available ? "Disponible" : "No disponible"}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -253,7 +364,7 @@ export default function AdminMenuPage() {
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => toggleStatus(item.id)}>
-                          {item.status === "activo" ? "Desactivar" : "Activar"}
+                          {item.is_available ? "Desactivar" : "Activar"}
                         </Button>
                         <Button
                           size="sm"
