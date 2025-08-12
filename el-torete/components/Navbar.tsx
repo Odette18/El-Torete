@@ -1,12 +1,36 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
-import { Menu, X, Beef } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Menu, X, Beef, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { createClient } from "@/lib/supabase/client"
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [loading, setLoading] = useState(true)
+  
+  const supabase = createClient()
+
+  useEffect(() => {
+    // Verificar sesión inicial
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setIsLoggedIn(!!session)
+      setLoading(false)
+    }
+
+    checkSession()
+
+    // Escuchar cambios en la autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsLoggedIn(!!session)
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   const navItems = [
     { name: "Inicio", href: "/" },
@@ -37,9 +61,22 @@ export function Navbar() {
                 {item.name}
               </Link>
             ))}
-            <Button asChild className="bg-primary hover:bg-primary/90">
-              <Link href="/login">Iniciar Sesión</Link>
-            </Button>
+            {!loading && (
+              <>
+                {isLoggedIn ? (
+                  <Button asChild className="bg-primary hover:bg-primary/90">
+                    <Link href="/protected">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Panel Administrativo
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button asChild className="bg-primary hover:bg-primary/90">
+                    <Link href="/login">Iniciar Sesión</Link>
+                  </Button>
+                )}
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -64,11 +101,22 @@ export function Navbar() {
                   {item.name}
                 </Link>
               ))}
-              <div className="px-3 py-2">
-                <Button asChild className="w-full bg-primary hover:bg-primary/90">
-                  <Link href="/auth/login">Iniciar Sesión</Link>
-                </Button>
-              </div>
+              {!loading && (
+                <div className="px-3 py-2">
+                  {isLoggedIn ? (
+                    <Button asChild className="w-full bg-primary hover:bg-primary/90">
+                      <Link href="/protected" onClick={() => setIsOpen(false)}>
+                        <Settings className="h-4 w-4 mr-2" />
+                        Panel Administrativo
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button asChild className="w-full bg-primary hover:bg-primary/90">
+                      <Link href="/login" onClick={() => setIsOpen(false)}>Iniciar Sesión</Link>
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
