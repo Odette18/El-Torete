@@ -53,10 +53,10 @@ export default async function MenuPage() {
           </div>
           <CardContent className="p-6 bg-secondary/5 flex flex-col flex-1 justify-between">
             <div>
-              <h3 className="text-xl font-bold text-white mb-2">{item.name}</h3>
-              <p className="text-gray-300 mb-4">{item.description}</p>
+              <h3 className="text-xl font-bold text-[#1F2937] mb-2">{item.name}</h3>
+              <p className="text-gray-600 mb-4">{item.description}</p>
               {item.ingredients && item.ingredients.length > 0 && (
-                <p className="text-sm text-gray-400 mb-3">
+                <p className="text-sm text-gray-500 mb-3">
                   <strong>Ingredientes:</strong> {item.ingredients.join(", ")}
                 </p>
               )}

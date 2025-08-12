@@ -30,6 +30,7 @@ type MenuItem = {
   price: number
   category_id: string
   is_available: boolean
+  image_url?: string
   categories?: {
     id: string
     name: string
@@ -56,6 +57,7 @@ export default function AdminMenuPage() {
     category_id: "",
     price: "",
     description: "",
+    image_url: "",
   })
 
   const supabase = createClient()
@@ -105,6 +107,7 @@ export default function AdminMenuPage() {
         description: formData.description,
         price: Number.parseFloat(formData.price),
         category_id: formData.category_id,
+        image_url: formData.image_url || undefined,
       }
 
       if (editingItem) {
@@ -156,7 +159,7 @@ export default function AdminMenuPage() {
   }
 
   const resetForm = () => {
-    setFormData({ name: "", category_id: "", price: "", description: "" })
+    setFormData({ name: "", category_id: "", price: "", description: "", image_url: "" })
     setEditingItem(null)
     setIsDialogOpen(false)
   }
@@ -168,6 +171,7 @@ export default function AdminMenuPage() {
       category_id: item.category_id,
       price: item.price.toString(),
       description: item.description,
+      image_url: item.image_url || "",
     })
     setIsDialogOpen(true)
   }
@@ -299,6 +303,16 @@ export default function AdminMenuPage() {
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="image_url">URL de la Imagen (opcional)</Label>
+                    <Input
+                      id="image_url"
+                      type="url"
+                      value={formData.image_url}
+                      onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                      placeholder="https://ejemplo.com/imagen.jpg"
                     />
                   </div>
                   <div className="flex justify-end space-x-2">

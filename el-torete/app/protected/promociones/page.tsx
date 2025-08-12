@@ -43,6 +43,7 @@ export default function AdminPromocionesPage() {
     start_date: "",
     end_date: "",
     terms_conditions: "",
+    image_url: "",
   })
 
   const promoTypes = [
@@ -88,6 +89,7 @@ export default function AdminPromocionesPage() {
         start_date: formData.start_date || undefined,
         end_date: formData.end_date || undefined,
         terms_conditions: formData.terms_conditions || undefined,
+        image_url: formData.image_url || undefined,
       }
 
       if (editingItem) {
@@ -133,6 +135,7 @@ export default function AdminPromocionesPage() {
       start_date: "",
       end_date: "",
       terms_conditions: "",
+      image_url: "",
     })
     setEditingItem(null)
     setIsDialogOpen(false)
@@ -148,6 +151,7 @@ export default function AdminPromocionesPage() {
       start_date: item.start_date || "",
       end_date: item.end_date || "",
       terms_conditions: item.terms_conditions || "",
+      image_url: item.image_url || "",
     })
     setIsDialogOpen(true)
   }
@@ -291,6 +295,16 @@ export default function AdminPromocionesPage() {
                       value={formData.terms_conditions}
                       onChange={(e) => setFormData({ ...formData, terms_conditions: e.target.value })}
                       placeholder="Términos y condiciones opcionales"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="image_url">URL de la Imagen (opcional)</Label>
+                    <Input
+                      id="image_url"
+                      type="url"
+                      value={formData.image_url}
+                      onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                      placeholder="https://ejemplo.com/imagen.jpg"
                     />
                   </div>
                   <div className="flex justify-end space-x-2">

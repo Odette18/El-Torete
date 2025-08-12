@@ -22,6 +22,7 @@ type Location = {
   phone?: string
   features?: string[]
   is_active: boolean
+  image_url?: string
   hours_monday?: string
   hours_tuesday?: string
   hours_wednesday?: string
@@ -42,6 +43,7 @@ export default function AdminUbicacionesPage() {
     address: "",
     phone: "",
     features: "",
+    image_url: "",
     hours_monday: "",
     hours_tuesday: "",
     hours_wednesday: "",
@@ -84,6 +86,7 @@ export default function AdminUbicacionesPage() {
         address: formData.address,
         phone: formData.phone || undefined,
         features: formData.features ? formData.features.split(',').map(f => f.trim()) : [],
+        image_url: formData.image_url || undefined,
         hours_monday: formData.hours_monday || undefined,
         hours_tuesday: formData.hours_tuesday || undefined,
         hours_wednesday: formData.hours_wednesday || undefined,
@@ -133,6 +136,7 @@ export default function AdminUbicacionesPage() {
       address: "", 
       phone: "", 
       features: "",
+      image_url: "",
       hours_monday: "",
       hours_tuesday: "",
       hours_wednesday: "",
@@ -152,6 +156,7 @@ export default function AdminUbicacionesPage() {
       address: item.address,
       phone: item.phone || "",
       features: item.features?.join(', ') || "",
+      image_url: item.image_url || "",
       hours_monday: item.hours_monday || "",
       hours_tuesday: item.hours_tuesday || "",
       hours_wednesday: item.hours_wednesday || "",
@@ -322,6 +327,16 @@ export default function AdminUbicacionesPage() {
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="image_url">URL de la Imagen (opcional)</Label>
+                    <Input
+                      id="image_url"
+                      type="url"
+                      value={formData.image_url}
+                      onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                      placeholder="https://ejemplo.com/imagen.jpg"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
