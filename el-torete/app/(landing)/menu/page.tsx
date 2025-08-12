@@ -43,25 +43,27 @@ export default async function MenuPage() {
   const renderMenuItems = (items: typeof menuItems) => (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
       {items?.map((item) => (
-        <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow border-2 border-secondary/20">
-          <div className="aspect-video bg-gray-200">
+        <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow border-2 border-secondary/20 flex flex-col h-full">
+          <div className="aspect-video bg-gray-200 flex-shrink-0">
             <img
               src={item.image_url || "/placeholder.svg?height=150&width=200"}
               alt={item.name}
               className="w-full h-full object-cover"
             />
           </div>
-          <CardContent className="p-6 bg-secondary/5">
-            <h3 className="text-xl font-bold text-[#1F2937] mb-2">{item.name}</h3>
-            <p className="text-gray-600 mb-4">{item.description}</p>
-            {item.ingredients && item.ingredients.length > 0 && (
-              <p className="text-sm text-gray-500 mb-3">
-                <strong>Ingredientes:</strong> {item.ingredients.join(", ")}
-              </p>
-            )}
-            <div className="flex justify-between items-center">
+          <CardContent className="p-6 bg-secondary/5 flex flex-col flex-1 justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">{item.name}</h3>
+              <p className="text-gray-300 mb-4">{item.description}</p>
+              {item.ingredients && item.ingredients.length > 0 && (
+                <p className="text-sm text-gray-400 mb-3">
+                  <strong>Ingredientes:</strong> {item.ingredients.join(", ")}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end">
               <span className="text-2xl font-bold text-primary">${item.price}</span>
-              <Button className="bg-primary hover:bg-primary/90">Agregar</Button>
+              {/* <Button className="bg-primary hover:bg-primary/90">Agregar</Button> */}
             </div>
           </CardContent>
         </Card>
